@@ -7,24 +7,48 @@ output: word_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(NHANES)
+library(tidyverse)
+library(ggplot2) 
+library(caret)
+library(AppliedPredictiveModeling)
+library(pROC)
 ```
 
-## R Markdown
+## Import dataset
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+#import dataset
+data("NHANES")
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+#clean dataset - limit to 2011/12 and only include biological predictors, dropped some biological predictors due to excess missing data
+nhanes = NHANES %>% janitor::clean_names() %>% filter(survey_yr == "2011_12") %>% select(weight, height, bmi, pulse:bp_dia3, direct_chol:urine_flow1, diabetes) %>% drop_na()
 
-```{r cars}
-summary(cars)
+summary(nhanes) 
+#create a feature plot to better visualize the data
+theme1 <- transparentTheme(trans = .4) 
+trellis.par.set(theme1)
+featurePlot(x = nhanes[, 1:16],
+            y = nhanes$diabetes,
+            scales = list(x = list(relation = "free"), y = list(relation = "free")),
+            plot = "density", pch = "|", auto.key = list(columns = 2))
+
 ```
 
-## Including Plots
+## Create Data Partition
 
-You can also embed plots, for example:
+```{r}
+set.seed(2)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+train_rows = createDataPartition(y = nhanes$diabetes,p = 0.7,list = FALSE)
+train = nhanes[train_rows, ]
+test = nhanes[-train_rows, ]
+
+x = model.matrix(diabetes ~ ., train)[ ,-1]
+y = train$diabetes
+
+x2 = model.matrix(diabetes ~ ., test)[ ,-1]
+y2 = test$diabetes
+
+control1 = trainControl(method = "cv", selectionFunction = "best", sampling = "down")
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
