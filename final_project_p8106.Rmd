@@ -13,6 +13,7 @@ library(ggplot2)
 library(caret)
 library(AppliedPredictiveModeling)
 library(pROC)
+library(randomForest) 
 ```
 
 ## Import dataset
@@ -52,3 +53,76 @@ y2 = test$diabetes
 
 control1 = trainControl(method = "cv", selectionFunction = "best", sampling = "down")
 ```
+
+
+## Lasso Model
+```{r}
+set.seed(2)
+lasso_fit = train(x, y, 
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1, lambda = exp(seq(-20, 20,length=100))),
+                   trControl = control1,
+                   preProcess=c("center", "scale"),
+                   family = "binomial") 
+
+#Print the values of alpha and lambda that gave best prediction
+lasso_fit$bestTune
+
+#Print all of the options examined
+lasso_fit$results
+
+# Model coefficients
+coef(lasso_fit$finalModel, s = lasso_fit$bestTune$lambda)
+
+
+# Make predictions
+lasso_pred = lasso_fit %>% predict(x2) %>% as.numeric()
+lasso_pred_p = ifelse(lasso_pred-1 > 0.5,1,0)
+
+test_outcome_lasso = (as.numeric(y2)-1)
+
+misclasserror_lasso = mean(lasso_pred_p != test_outcome_lasso, na.rm=T)
+print(paste('Accuracy Model 1', 1-misclasserror_lasso))
+
+```
+
+## Random Forest
+```{r}
+mtry_vals = c(ncol(train)-1, sqrt(ncol(train)-1), 0.5*ncol(train)-1)
+
+mtry_grid = expand.grid(.mtry=mtry_vals)
+
+set.seed(2)
+rf_fit = train(diabetes ~., 
+               data = train, 
+               method="rf", 
+               trControl = control1, 
+               metric="Accuracy", 
+               tuneGrid=mtry_grid, 
+               ntree=100)
+
+rf_fit$results
+rf_fit$bestTune
+rf_fit$finalModel
+
+varImp(rf_fit)
+plot(varImp(rf_fit))
+
+varImpPlot(rf_fit$finalModel)
+
+rf_pred = predict(rf_fit, test) %>% as.numeric()
+rf_pred_p = ifelse(rf_pred-1 > 0.5,1,0)
+
+test_outcome_rf = (as.numeric(test$diabetes)-1)
+
+misclasserror_rf = mean(rf_pred_p != test_outcome_rf, na.rm=T)
+print(paste('Accuracy Model 2', 1-misclasserror_rf))
+
+```
+
+## Model Comparisons
+```{r}
+resamp = resamples(list(lasso = lasso_fit, rf = rf_fit)) 
+summary(resamp)
+```
+
