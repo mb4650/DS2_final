@@ -22,16 +22,16 @@ library(pROC)
 data("NHANES")
 
 #clean dataset - limit to 2011/12 and only include biological predictors, dropped some biological predictors due to excess missing data
-nhanes = NHANES %>% janitor::clean_names() %>% filter(survey_yr == "2011_12") %>% select(weight, height, bmi, pulse:bp_dia3, direct_chol:urine_flow1, diabetes) %>% drop_na()
+nhanes = NHANES %>% janitor::clean_names() %>% filter(survey_yr == "2011_12") %>% select(gender, age, race1, weight, height, bmi, pulse:bp_dia3, direct_chol:urine_flow1, diabetes) %>% drop_na()
 
 summary(nhanes) 
 #create a feature plot to better visualize the data
 theme1 <- transparentTheme(trans = .4) 
 trellis.par.set(theme1)
-featurePlot(x = nhanes[, 1:16],
-            y = nhanes$diabetes,
-            scales = list(x = list(relation = "free"), y = list(relation = "free")),
-            plot = "density", pch = "|", auto.key = list(columns = 2))
+#featurePlot(x = nhanes[, 1:19],
+#            y = nhanes$diabetes,
+#            scales = list(x = list(relation = "free"), y = list(relation = "free")),
+#            plot = "density", pch = "|", auto.key = list(columns = 2))
 
 ```
 
