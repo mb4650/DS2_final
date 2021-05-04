@@ -14,6 +14,7 @@ library(caret)
 library(AppliedPredictiveModeling)
 library(pROC)
 library(randomForest) 
+library(corrplot)
 ```
 
 ## Import dataset
@@ -24,26 +25,54 @@ data("NHANES")
 
 #clean dataset - limit to 2011/12 and only include biological predictors, dropped some biological predictors due to excess missing data
 nhanes = NHANES %>% janitor::clean_names() %>% filter(survey_yr == "2011_12") %>% select(gender, age, race1, weight, height, bmi, pulse:bp_dia3, direct_chol:urine_flow1, diabetes) %>% drop_na()
-
-summary(nhanes) 
-#create a feature plot to better visualize the data
-theme1 <- transparentTheme(trans = .4) 
-trellis.par.set(theme1)
-#featurePlot(x = nhanes[, 1:19],
-#            y = nhanes$diabetes,
-#            scales = list(x = list(relation = "free"), y = list(relation = "free")),
-#            plot = "density", pch = "|", auto.key = list(columns = 2))
-
 ```
+
+# Exploratory Data Analysis
+```{r}
+nhanes_2 = 
+  nhanes %>%
+  select(diabetes, everything())
+
+summary(nhanes_2) 
+
+#correlation plots for predictor variables
+corrx = model.matrix(diabetes~., nhanes_2)[,-1]
+corrplot(cor(corrx))
+
+#remove variables with correlation greater than 0.8
+indexesToDrop = findCorrelation(cor(corrx), cutoff = 0.8)
+corrplot(cor(corrx[,-indexesToDrop]))
+
+
+#final dataset for analysis using RF and analysis
+nhanes_3 = 
+  nhanes_2 %>%
+  select(diabetes, age, height, bmi, pulse, bp_sys1, bp_dia3, direct_chol, tot_chol,
+         urine_vol1, urine_flow1, gender, race1)
+
+
+# look at feature plots for continuous predictors (everything but race1 and gender)
+theme1 = transparentTheme(trans =.4)
+trellis.par.set(theme1)
+
+
+featurePlot(x=nhanes_3[,2:11],
+            y=nhanes_3$diabetes,
+            scales =list(x=list(relation ="free"),
+                         y=list(relation ="free")),
+            plot ="density",pch ="|",
+            auto.key =list(columns =2))
+```
+
 
 ## Create Data Partition
 
 ```{r}
 set.seed(2)
 
-train_rows = createDataPartition(y = nhanes$diabetes,p = 0.7,list = FALSE)
-train = nhanes[train_rows, ]
-test = nhanes[-train_rows, ]
+train_rows = createDataPartition(y = nhanes_3$diabetes,p = 0.7,list = FALSE)
+train = nhanes_3[train_rows, ]
+test = nhanes_3[-train_rows, ]
 
 x = model.matrix(diabetes ~ ., train)[ ,-1]
 y = train$diabetes
@@ -53,7 +82,6 @@ y2 = test$diabetes
 
 control1 = trainControl(method = "cv", selectionFunction = "best", sampling = "down")
 ```
-
 
 ## Lasso Model
 ```{r}
@@ -124,5 +152,14 @@ print(paste('Accuracy Model 2', 1-misclasserror_rf))
 ```{r}
 resamp = resamples(list(lasso = lasso_fit, rf = rf_fit)) 
 summary(resamp)
+```
+## Final dataset after selecting variables from RF model
+We selected variables from our random forest model since it had the highest accuracy compared to the lasso model
+```{r}
+#Final dataset after variable selection
+nhanes_4 = 
+  nhanes_3 %>%
+  select(diabetes, age, bmi, bp_sys1, direct_chol, urine_flow1, height, bp_dia3, pulse, urine_vol1,
+         tot_chol)
 ```
 
