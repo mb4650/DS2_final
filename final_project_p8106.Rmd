@@ -161,5 +161,72 @@ nhanes_4 =
   nhanes_3 %>%
   select(diabetes, age, bmi, bp_sys1, direct_chol, urine_flow1, height, bp_dia3, pulse, urine_vol1,
          tot_chol)
+
+#training and testing
+
+train_rows2 = createDataPartition(y = nhanes_4$diabetes,p = 0.7,list = FALSE)
+train2 = nhanes_4[train_rows, ]
+test2 = nhanes_4[-train_rows, ]
+```
+
+## SVC Analysis
+```{r}
+ctrl = trainControl(method = "cv")
+
+#Analysis using linear kernal
+# kernlab
+set.seed(1)
+svml.fit = train(diabetes ~ . , 
+                  data = nhanes_4[train_rows,], 
+                  method = "svmLinear",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = data.frame(C = exp(seq(-5,5,len=20))),
+                  trControl = ctrl)
+svml.fit #C = 0.006737
+
+plot(svml.fit, highlight = TRUE, xTrans = log)
+
+#Analysis using radial kernal
+svmr.grid = expand.grid(C = exp(seq(-4,6,len=10)),
+                         sigma = exp(seq(-10,10,len=10)))
+
+# tunes over both cost and sigma
+set.seed(1)             
+svmr.fit = train(diabetes ~ . , nhanes_4,
+                  subset = train_rows2,
+                  method = "svmRadialSigma",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = svmr.grid,
+                  trControl = ctrl)
+svmr.fit #C = 1.559623, sigma = 0.22026,47 - tune differently??
+
+plot(svmr.fit, highlight = TRUE)
+
+```
+
+## QDA
+```{r}
+#qda
+set.seed(1)
+
+ctrl1 = trainControl(method = "repeatedcv", repeats = 5,
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE)
+
+model.qda = train(x = train2[2:11],
+                  y = train2$diabetes,
+                  method = "qda",
+                  metric = "ROC",
+                  trControl = ctrl1)
+
+#evaluate qda model
+qda.pred = predict(model.qda, newdata = test2, type = "prob")[,2]
+
+roc.qda = roc(test2$diabetes, qda.pred)
+
+qda.auc = roc.qda$auc[1]
+qda.auc
+
+plot(roc.qda, legacy.axes = TRUE)
 ```
 
