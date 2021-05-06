@@ -179,63 +179,82 @@ summary(nhanes_4)
 
 ## SVC Analysis
 ```{r}
-ctrl = trainControl(method = "cv")
+ctrl = trainControl(method = "cv", sampling = "up",summaryFunction = twoClassSummary,
+                     classProbs = TRUE)
 
 #Analysis using linear kernal
 # kernlab
-set.seed(1)
+set.seed(2)
 svml.fit = train(diabetes ~ . , 
                   data = nhanes_4[train_rows,], 
                   method = "svmLinear",
                   preProcess = c("center", "scale"),
                   tuneGrid = data.frame(C = exp(seq(-5,5,len=20))),
                   trControl = ctrl)
-svml.fit #C = 0.006737
+svml.fit #C = 6.309808
 
 plot(svml.fit, highlight = TRUE, xTrans = log)
 
 #Analysis using radial kernal
 svmr.grid = expand.grid(C = exp(seq(-4,6,len=10)),
-                         sigma = exp(seq(-10,10,len=10)))
+                         sigma = exp(seq(-6,1,len=10)))
 
 # tunes over both cost and sigma
-set.seed(1)             
+set.seed(2)             
 svmr.fit = train(diabetes ~ . , nhanes_4,
                   subset = train_rows2,
                   method = "svmRadialSigma",
                   preProcess = c("center", "scale"),
                   tuneGrid = svmr.grid,
                   trControl = ctrl)
-svmr.fit #C = 1.559623, sigma = 0.22026,47 - tune differently??
+svmr.fit #C = 1.559623, sigma = 1.248849 
 
 plot(svmr.fit, highlight = TRUE)
 
+#evaluate svml model
+svml.pred = predict(svml.fit, newdata = test2, type = "prob")[,2]
+test.pred <- rep("No", length(svml.pred))
+test.pred[svml.pred>0.5] <- "Yes"
+
+##Creating the confusion matrix:
+confusionMatrix(data = as.factor(test.pred),
+                reference = test2$diabetes,
+                positive = "Yes")
+
+#evaluate svmr model
+svmr.pred = predict(svmr.fit, newdata = test2, type = "prob")[,2]
+test.pred <- rep("No", length(svmr.pred))
+test.pred[svmr.pred>0.5] <- "Yes"
+
+##Creating the confusion matrix:
+confusionMatrix(data = as.factor(test.pred),
+                reference = test2$diabetes,
+                positive = "Yes")
 ```
 
 ## QDA
 ```{r}
 #qda
-set.seed(1)
+set.seed(2)
 
-ctrl1 = trainControl(method = "repeatedcv", repeats = 5,
+ctrl1 = trainControl(method = "cv",sampling = "up",
                      summaryFunction = twoClassSummary,
                      classProbs = TRUE)
 
-model.qda = train(x = train2[2:11],
-                  y = train2$diabetes,
+model.qda = train(diabetes~., data = train2,
                   method = "qda",
-                  metric = "ROC",
+                  preProcess = c("center","scale"),
                   trControl = ctrl1)
 
 #evaluate qda model
 qda.pred = predict(model.qda, newdata = test2, type = "prob")[,2]
+test.pred <- rep("No", length(qda.pred))
+test.pred[qda.pred>0.5] <- "Yes"
 
-roc.qda = roc(test2$diabetes, qda.pred)
-
-qda.auc = roc.qda$auc[1]
-qda.auc
-
-plot(roc.qda, legacy.axes = TRUE)
+##Creating the confusion matrix:
+confusionMatrix(data = as.factor(test.pred),
+                reference = test2$diabetes,
+                positive = "Yes")
 ```
 
 ## MARS
@@ -322,22 +341,32 @@ Accuracy : 0.6952
 ```{r}
 set.seed(2)
 
+roc.svml <- roc(test2$diabetes, svml.pred)
+roc.svmr <- roc(test2$diabetes, svmr.pred)
 roc.qda <- roc(test2$diabetes, qda.pred)
 roc.MARS <- roc(test2$diabetes, test.pred.prob.mars)
 roc.lda <- roc(test2$diabetes, test.pred.prob.lda)
 roc.knn <- roc(test2$diabetes, test.pred.prob.knn)
 
 
-auc <- c(roc.qda$auc[1], roc.MARS$auc[1], roc.lda$auc[1], roc.knn$auc[1])
+auc <- c(roc.svml$auc[1],roc.svmr$auc[1],roc.qda$auc[1], roc.MARS$auc[1], roc.lda$auc[1], roc.knn$auc[1])
 
-
+plot(roc.svml, legacy.axes = TRUE, col = 1)
 plot(roc.qda, legacy.axes = TRUE, add=TRUE, col = 2)
 plot(roc.MARS, legacy.axes = TRUE, add=TRUE, col = 3)
 plot(roc.lda, legacy.axes = TRUE, add=TRUE, col = 4)
 plot(roc.knn, legacy.axes = TRUE, add=TRUE, col = 5)
-models.used <- c("QDA","MARS", "LDA", "Knn") 
+plot(roc.svmr, legacy.axes = TRUE, add=TRUE, col = 6)
+models.used <- c("SVML","QDA","MARS", "LDA", "KNN", "SVMR") 
 
 legend("bottomright", legend = paste0(models.used, ": ", round(auc,3)), col = 1:6, lwd = 1)
 
 
+```
+
+
+## Model Comparisons
+```{r}
+resamp2 = resamples(list(svml = svml.fit, svmr = svmr.fit, qda = model.qda, mars = mars.fit, knn = knn.fit, lda = lda.fit)) 
+summary(resamp2)
 ```
