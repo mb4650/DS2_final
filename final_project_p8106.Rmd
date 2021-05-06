@@ -3,6 +3,8 @@ title: "final_project_p8106"
 author: "Michelle Lui"
 date: "4/27/2021"
 output: word_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -15,6 +17,7 @@ library(AppliedPredictiveModeling)
 library(pROC)
 library(randomForest) 
 library(corrplot)
+
 ```
 
 ## Import dataset
@@ -154,7 +157,7 @@ resamp = resamples(list(lasso = lasso_fit, rf = rf_fit))
 summary(resamp)
 ```
 ## Final dataset after selecting variables from RF model
-We selected variables from our random forest model since it had the highest accuracy compared to the lasso model
+We selected variables from our random forest model since it had the higher accuracy compared to the lasso model
 ```{r}
 #Final dataset after variable selection
 nhanes_4 = 
@@ -168,6 +171,11 @@ train_rows2 = createDataPartition(y = nhanes_4$diabetes,p = 0.7,list = FALSE)
 train2 = nhanes_4[train_rows, ]
 test2 = nhanes_4[-train_rows, ]
 ```
+
+```{r}
+summary(nhanes_4)
+```
+
 
 ## SVC Analysis
 ```{r}
@@ -230,3 +238,106 @@ qda.auc
 plot(roc.qda, legacy.axes = TRUE)
 ```
 
+## MARS
+
+```{r}
+ctrl2 <- trainControl(method = "cv", sampling = 'up')
+ctrl3 <- trainControl(method = "cv", sampling = 'up',
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE)
+
+library(MASS)
+library(earth)
+
+set.seed(2)
+
+mars_grid <- expand.grid(degree = 1:5, 
+                         nprune = 2:20)
+mars.fit <- train(diabetes ~., data = train2,
+                 method = "earth",
+                 tuneGrid = mars_grid,
+                 trControl = ctrl2)
+
+test.pred.prob.mars <- predict(mars.fit, newdata = test2, type = "prob")[,2]
+test.pred <- rep("No", length(test.pred.prob.mars))
+test.pred[test.pred.prob.mars>0.5] <- "Yes"
+
+##Creating the confusion matrix:
+confusionMatrix(data = as.factor(test.pred),
+                reference = test2$diabetes,
+                positive = "Yes")
+
+```
+
+Accuracy : 0.7521
+
+
+## KNN
+
+```{r}
+set.seed(2)
+knn.fit <- train(diabetes ~., data = train2,
+                   method = "knn",
+                   preProcess = c("center","scale"),
+                   tuneGrid = data.frame(k = seq(2,200,by=5)),
+                   trControl = ctrl2)
+
+ggplot(knn.fit, highlight = TRUE)
+
+test.pred.prob.knn <- predict(knn.fit, newdata = test2,
+                           type = "prob")[,2]
+test.pred <- rep("No", length(test.pred.prob.knn))
+test.pred[test.pred.prob.knn>0.5] <- "Yes"
+
+##Creating the confusion matrix:
+confusionMatrix(data = as.factor(test.pred),
+                reference = test2$diabetes,
+                positive = "Yes")
+
+```
+
+Accuracy : 0.9155
+
+##LDA
+```{r}
+set.seed(2)
+lda.fit <- train(diabetes ~., data = train2, preProcess = c("center","scale"),
+                   method = "lda",
+                   trControl = ctrl3)
+
+test.pred.prob.lda <- predict(lda.fit, newdata = test2, type = "prob")[,2]
+test.pred <- rep("No", length(test.pred.prob.lda))
+test.pred[test.pred.prob.lda>0.5] <- "Yes"
+
+##Creating the confusion matrix:
+confusionMatrix(data = as.factor(test.pred),
+                reference = test2$diabetes,
+                positive = "Yes")
+
+```
+
+Accuracy : 0.6952
+
+##Plotting the ROC curves to determine the best model, printing the AUC. 
+```{r}
+set.seed(2)
+
+roc.qda <- roc(test2$diabetes, qda.pred)
+roc.MARS <- roc(test2$diabetes, test.pred.prob.mars)
+roc.lda <- roc(test2$diabetes, test.pred.prob.lda)
+roc.knn <- roc(test2$diabetes, test.pred.prob.knn)
+
+
+auc <- c(roc.qda$auc[1], roc.MARS$auc[1], roc.lda$auc[1], roc.knn$auc[1])
+
+
+plot(roc.qda, legacy.axes = TRUE, add=TRUE, col = 2)
+plot(roc.MARS, legacy.axes = TRUE, add=TRUE, col = 3)
+plot(roc.lda, legacy.axes = TRUE, add=TRUE, col = 4)
+plot(roc.knn, legacy.axes = TRUE, add=TRUE, col = 5)
+models.used <- c("QDA","MARS", "LDA", "Knn") 
+
+legend("bottomright", legend = paste0(models.used, ": ", round(auc,3)), col = 1:6, lwd = 1)
+
+
+```
