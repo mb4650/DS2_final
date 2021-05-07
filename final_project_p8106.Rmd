@@ -260,10 +260,7 @@ confusionMatrix(data = as.factor(test.pred),
 ## MARS
 
 ```{r}
-ctrl2 <- trainControl(method = "cv", sampling = 'up')
-ctrl3 <- trainControl(method = "cv", sampling = 'up',
-                     summaryFunction = twoClassSummary,
-                     classProbs = TRUE)
+
 
 library(MASS)
 library(earth)
@@ -275,8 +272,9 @@ mars_grid <- expand.grid(degree = 1:5,
 mars.fit <- train(diabetes ~., data = train2,
                  method = "earth",
                  tuneGrid = mars_grid,
-                 trControl = ctrl2)
+                 trControl = ctrl)
 
+#evaluate MARS model
 test.pred.prob.mars <- predict(mars.fit, newdata = test2, type = "prob")[,2]
 test.pred <- rep("No", length(test.pred.prob.mars))
 test.pred[test.pred.prob.mars>0.5] <- "Yes"
@@ -287,6 +285,13 @@ confusionMatrix(data = as.factor(test.pred),
                 positive = "Yes")
 
 ```
+
+
+```{r}
+library(vip)
+vip(mars.fit, num_features = 17, bar = FALSE, value = "gcv") + ggtitle("Variable importance")
+```
+
 
 Accuracy : 0.7521
 
@@ -299,7 +304,7 @@ knn.fit <- train(diabetes ~., data = train2,
                    method = "knn",
                    preProcess = c("center","scale"),
                    tuneGrid = data.frame(k = seq(2,200,by=5)),
-                   trControl = ctrl2)
+                   trControl = ctrl)
 
 ggplot(knn.fit, highlight = TRUE)
 
@@ -315,7 +320,8 @@ confusionMatrix(data = as.factor(test.pred),
 
 ```
 
-Accuracy : 0.9155
+Accuracy : 0.7331
+
 
 ##LDA
 ```{r}
